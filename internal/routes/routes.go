@@ -8,8 +8,17 @@ import (
 	"github.com/yourusername/kapufresh-erp/internal/services"
 )
 
-func New(auth *services.AuthService, catalog *services.CatalogService) *gin.Engine {
+func New(
+	auth *services.AuthService,
+	catalog *services.CatalogService,
+	inventory *services.InventoryService,
+	commerce *services.CommerceService,
+	employees *services.EmployeeService,
+	reports *services.ReportService,
+	corsAllowedOrigins []string,
+) *gin.Engine {
 	router := gin.Default()
+	router.Use(middleware.CORS(corsAllowedOrigins))
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "kapufresh-erp"})
 	})
@@ -48,6 +57,38 @@ func New(auth *services.AuthService, catalog *services.CatalogService) *gin.Engi
 	protected.GET("/products/:id", catalogHandler.GetProduct)
 	protected.PATCH("/products/:id", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), catalogHandler.UpdateProduct)
 	protected.DELETE("/products/:id", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), catalogHandler.DeleteProduct)
+
+	inventoryHandler := handlers.NewInventoryHandler(inventory)
+	protected.POST("/products/:id/stock-movements", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), inventoryHandler.RecordMovement)
+	protected.GET("/products/:id/stock-movements", inventoryHandler.ListProductMovements)
+	protected.GET("/stock-movements", inventoryHandler.ListMovements)
+	protected.GET("/inventory/low-stock", inventoryHandler.LowStock)
+
+	commerceHandler := handlers.NewCommerceHandler(commerce)
+	protected.POST("/sales/orders", middleware.RequireRoles(models.RoleAdmin, models.RoleManager, models.RoleStaff), commerceHandler.CreateSalesOrder)
+	protected.GET("/sales/orders", commerceHandler.ListSalesOrders)
+	protected.GET("/sales/orders/:id", commerceHandler.GetSalesOrder)
+	protected.POST("/sales/orders/:id/confirm", middleware.RequireRoles(models.RoleAdmin, models.RoleManager, models.RoleStaff), commerceHandler.ConfirmSalesOrder)
+	protected.POST("/sales/orders/:id/cancel", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), commerceHandler.CancelSalesOrder)
+	protected.POST("/sales/orders/:id/payments", middleware.RequireRoles(models.RoleAdmin, models.RoleManager, models.RoleStaff), commerceHandler.RecordPayment)
+
+	protected.POST("/purchases/orders", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), commerceHandler.CreatePurchaseOrder)
+	protected.GET("/purchases/orders", commerceHandler.ListPurchaseOrders)
+	protected.GET("/purchases/orders/:id", commerceHandler.GetPurchaseOrder)
+	protected.POST("/purchases/orders/:id/order", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), commerceHandler.OrderPurchaseOrder)
+	protected.POST("/purchases/orders/:id/receive", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), commerceHandler.ReceivePurchaseOrder)
+
+	employeeHandler := handlers.NewEmployeeHandler(employees)
+	protected.GET("/employees", employeeHandler.List)
+	protected.GET("/employees/:id", employeeHandler.Get)
+	protected.POST("/employees", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), employeeHandler.Create)
+	protected.PATCH("/employees/:id", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), employeeHandler.Update)
+	protected.DELETE("/employees/:id", middleware.RequireRoles(models.RoleAdmin, models.RoleManager), employeeHandler.Delete)
+
+	reportHandler := handlers.NewReportHandler(reports)
+	protected.GET("/reports/sales-summary", reportHandler.SalesSummary)
+	protected.GET("/reports/top-products", reportHandler.TopProducts)
+	protected.GET("/reports/stock-valuation", reportHandler.StockValuation)
 
 	return router
 }

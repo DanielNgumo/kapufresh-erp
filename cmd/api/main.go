@@ -41,7 +41,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure catalog: %v", err)
 	}
-	r := routes.New(authService, catalogService)
+	inventoryService, err := services.NewInventoryService(db)
+	if err != nil {
+		log.Fatalf("configure inventory: %v", err)
+	}
+	commerceService, err := services.NewCommerceService(db, cfg.CurrencyCode)
+	if err != nil {
+		log.Fatalf("configure commerce: %v", err)
+	}
+	employeeService, err := services.NewEmployeeService(db)
+	if err != nil {
+		log.Fatalf("configure employees: %v", err)
+	}
+	reportService, err := services.NewReportService(db, cfg.CurrencyCode)
+	if err != nil {
+		log.Fatalf("configure reports: %v", err)
+	}
+	r := routes.New(
+		authService, catalogService, inventoryService, commerceService, employeeService, reportService,
+		cfg.CORSAllowedOrigins,
+	)
 
 	if err := r.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("run server: %v", err)

@@ -40,7 +40,23 @@ func TestCatalogRoutesUseValidationAndRBAC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := routes.New(auth, catalog)
+	inventory, err := services.NewInventoryService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commerce, err := services.NewCommerceService(db, "KES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	employees, err := services.NewEmployeeService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reports, err := services.NewReportService(db, "KES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := routes.New(auth, catalog, inventory, commerce, employees, reports, nil)
 
 	unauthorized := httptest.NewRecorder()
 	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/v1/customers", nil))
@@ -134,6 +150,30 @@ func TestCatalogRoutesUseValidationAndRBAC(t *testing.T) {
 	if patchProduct.Code != http.StatusOK {
 		t.Fatalf("patch product status = %d, want %d; body: %s", patchProduct.Code, http.StatusOK, patchProduct.Body.String())
 	}
+	movement := httptest.NewRecorder()
+	movementRequest := httptest.NewRequest(http.MethodPost, productPath+"/stock-movements", bytes.NewReader(
+		[]byte(`{"type":"in","quantity":12,"reason":"Delivery received"}`),
+	))
+	movementRequest.Header.Set("Content-Type", "application/json")
+	movementRequest.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	router.ServeHTTP(movement, movementRequest)
+	if movement.Code != http.StatusCreated {
+		t.Fatalf("record movement status = %d, want %d; body: %s", movement.Code, http.StatusCreated, movement.Body.String())
+	}
+	productHistory := httptest.NewRecorder()
+	productHistoryRequest := httptest.NewRequest(http.MethodGet, productPath+"/stock-movements", nil)
+	productHistoryRequest.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	router.ServeHTTP(productHistory, productHistoryRequest)
+	if productHistory.Code != http.StatusOK {
+		t.Fatalf("product movement history status = %d, want %d; body: %s", productHistory.Code, http.StatusOK, productHistory.Body.String())
+	}
+	allHistory := httptest.NewRecorder()
+	allHistoryRequest := httptest.NewRequest(http.MethodGet, "/api/v1/stock-movements?product_id="+strconv.FormatUint(uint64(productResponse.Data.ID), 10), nil)
+	allHistoryRequest.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	router.ServeHTTP(allHistory, allHistoryRequest)
+	if allHistory.Code != http.StatusOK {
+		t.Fatalf("movement history status = %d, want %d; body: %s", allHistory.Code, http.StatusOK, allHistory.Body.String())
+	}
 
 	invalidProduct := httptest.NewRecorder()
 	invalidProductRequest := httptest.NewRequest(http.MethodPost, "/api/v1/products", bytes.NewReader(
@@ -208,6 +248,13 @@ func TestCatalogRoutesUseValidationAndRBAC(t *testing.T) {
 	router.ServeHTTP(deleteCustomer, deleteCustomerRequest)
 	if deleteCustomer.Code != http.StatusOK {
 		t.Fatalf("delete customer status = %d, want %d; body: %s", deleteCustomer.Code, http.StatusOK, deleteCustomer.Body.String())
+	}
+	lowStock := httptest.NewRecorder()
+	lowStockRequest := httptest.NewRequest(http.MethodGet, "/api/v1/inventory/low-stock?page=1&per_page=5", nil)
+	lowStockRequest.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	router.ServeHTTP(lowStock, lowStockRequest)
+	if lowStock.Code != http.StatusOK {
+		t.Fatalf("low stock status = %d, want %d; body: %s", lowStock.Code, http.StatusOK, lowStock.Body.String())
 	}
 
 	if _, err := auth.Register("Staff User", "staff@example.com", "catalog-staff-password", "staff"); err != nil {

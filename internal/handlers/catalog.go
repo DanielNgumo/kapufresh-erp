@@ -262,6 +262,8 @@ func (h *CatalogHandler) respondError(c *gin.Context, err error) {
 		utils.RespondError(c, http.StatusNotFound, "not_found", "Record was not found")
 	case errors.Is(err, services.ErrConflict):
 		utils.RespondError(c, http.StatusConflict, "conflict", "A product with that SKU already exists")
+	case errors.Is(err, services.ErrInsufficientStock):
+		utils.RespondError(c, http.StatusConflict, "insufficient_stock", "The stock change would result in a negative or overflowing balance")
 	case errors.Is(err, services.ErrInvalidInput):
 		utils.RespondError(c, http.StatusBadRequest, "invalid_request", "Request values are invalid")
 	default:

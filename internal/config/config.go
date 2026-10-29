@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net/mail"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -12,16 +13,17 @@ import (
 )
 
 type Config struct {
-	Environment     string
-	Port            string
-	DatabasePath    string
-	AdminName       string
-	AdminEmail      string
-	AdminPassword   string
-	CurrencyCode    string
-	JWTSecret       string
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
+	Environment        string
+	Port               string
+	DatabasePath       string
+	AdminName          string
+	AdminEmail         string
+	AdminPassword      string
+	CurrencyCode       string
+	JWTSecret          string
+	AccessTokenTTL     time.Duration
+	RefreshTokenTTL    time.Duration
+	CORSAllowedOrigins []string
 }
 
 func Load() (Config, error) {
@@ -39,6 +41,11 @@ func Load() (Config, error) {
 		CurrencyCode:  strings.ToUpper(envOrDefault("CURRENCY_CODE", "KES")),
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 	}
+	corsAllowedOrigins, err := parseCORSAllowedOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.CORSAllowedOrigins = corsAllowedOrigins
 
 	port, err := strconv.Atoi(cfg.Port)
 	if err != nil || port < 1 || port > 65535 {
@@ -78,6 +85,30 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func parseCORSAllowedOrigins(value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	origins := strings.Split(value, ",")
+	unique := make(map[string]struct{}, len(origins))
+	result := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		origin = strings.TrimSpace(origin)
+		parsed, err := url.Parse(origin)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+			parsed.Host == "" || parsed.User != nil || parsed.Path != "" ||
+			parsed.RawQuery != "" || parsed.Fragment != "" {
+			return nil, fmt.Errorf("CORS_ALLOWED_ORIGINS must be a comma-separated list of HTTP or HTTPS origins")
+		}
+		if _, exists := unique[origin]; exists {
+			continue
+		}
+		unique[origin] = struct{}{}
+		result = append(result, origin)
+	}
+	return result, nil
 }
 
 func envOrDefault(key, fallback string) string {

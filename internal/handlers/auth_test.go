@@ -39,7 +39,23 @@ func TestLoginAndMeHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := routes.New(auth, catalog)
+	inventory, err := services.NewInventoryService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commerce, err := services.NewCommerceService(db, "KES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	employees, err := services.NewEmployeeService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reports, err := services.NewReportService(db, "KES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := routes.New(auth, catalog, inventory, commerce, employees, reports, nil)
 
 	loginBody := []byte(`{"email":"admin@example.com","password":"handler-test-password"}`)
 	login := httptest.NewRecorder()
